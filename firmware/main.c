@@ -12,10 +12,10 @@
 #define SSR5 PORTA_D7
 #define SSR6 PORTA_D8
 #define SSR7 PORTA_D9
-#define SSR8 PORTA_D10
-#define SSR9 PORTA_D11
-#define SSR10 PORTA_D12
-#define SSR11 PORTA_A0
+#define SSR8 PORTA_A0
+#define SSR9 PORTA_D12
+#define SSR10 PORTA_D11
+#define SSR11 PORTA_D10
 #define SSRT PORTA_D13 //PORT_B5
 
 #define MEASURES 32
