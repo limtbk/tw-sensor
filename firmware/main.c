@@ -696,16 +696,61 @@ uint16_t measure_for_ssr11()
 	return result;
 }
 
+void print_version()
+{
+	usart_printstr("V1.1\n\r");
+}
 
 int main(void)
 {
 	init();
 
 	usart_printstr("\n\rCapacity sensor\n\r");
+	print_version();
 
 	uint16_t tarr[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	uint16_t minarr[12] = {UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX};
+	uint8_t cm = 0;
+	uint8_t m = 0;
 
 	while (1) {
+		if (usart_chrready()) {
+			char ch = usart_getchr();
+			switch (ch) {
+				case 'h':
+					{
+						usart_printstr(	"\n\r"
+										"h - help\n\r"
+										"m - measure once\n\r"
+										"c - start continuous measure\n\r"
+										"s - stop continuous measure\n\r"
+										"v - version\n\r");
+						break;
+					}
+				case 'v':
+					{
+						print_version();
+						break;
+					}
+				case 'm':
+					{
+						m = 1;
+						break;
+					}
+				case 'c':
+					{
+						cm = 1;
+						break;
+					}
+				case 's':
+					{
+						cm = 0;
+						break;
+					}
+				default:
+					break;
+			}
+		}
 
 		tarr[0] = measure_for_ssr0();
 		tarr[1] = measure_for_ssr1();
@@ -721,11 +766,19 @@ int main(void)
 		tarr[11] = measure_for_ssr11();
 
 		for (uint8_t ti = 0; ti < 12; ti++) {
-			usart_printhex(HI(tarr[ti]));
-			usart_printhex(LO(tarr[ti]));
-			usart_putchr(' ');
+			minarr[ti] = MIN(minarr[ti], tarr[ti]);
 		}
-		usart_printstr("\n\r");
+
+		if (m || cm) {
+			for (uint8_t ti = 0; ti < 12; ti++) {
+				uint16_t tt = tarr[ti] - minarr[ti];
+				usart_printhex(HI(tt));
+				usart_printhex(LO(tt));
+				usart_putchr(' ');
+			}
+			usart_printstr("\n\r");
+			m = 0;
+		}
 	}
 
 	return 0;
