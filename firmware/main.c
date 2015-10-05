@@ -698,7 +698,7 @@ uint16_t measure_for_ssr11()
 
 void print_version()
 {
-	usart_printstr("V1.1\n\r");
+	usart_printstr("V1.2\n\r");
 }
 
 int main(void)
@@ -710,8 +710,11 @@ int main(void)
 
 	uint16_t tarr[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	uint16_t minarr[12] = {UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX};
+	uint16_t maxarr[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	uint8_t cm = 0;
 	uint8_t m = 0;
+	uint8_t cal_min_cycles = 255;
+	uint8_t cal_max_cycles = 255;
 
 	while (1) {
 		if (usart_chrready()) {
@@ -724,6 +727,9 @@ int main(void)
 										"m - measure once\n\r"
 										"c - start continuous measure\n\r"
 										"s - stop continuous measure\n\r"
+										"r - reset calibration\n\r"
+										"n - calibrate min\n\r"
+										"x - calibrate max\n\r"
 										"v - version\n\r");
 						break;
 					}
@@ -747,6 +753,24 @@ int main(void)
 						cm = 0;
 						break;
 					}
+				case 'r':
+					{
+						for (uint8_t i=0; i<12; i++) {
+							minarr[i] = UINT16_MAX;
+							maxarr[i] = 0;
+						}
+						break;
+					}
+				case 'n':
+					{
+						cal_min_cycles = 255;
+						break;
+					}
+				case 'x':
+					{
+						cal_max_cycles = 255;
+						break;
+					}
 				default:
 					break;
 			}
@@ -765,13 +789,35 @@ int main(void)
 		tarr[10] = measure_for_ssr10();
 		tarr[11] = measure_for_ssr11();
 
-		for (uint8_t ti = 0; ti < 12; ti++) {
-			minarr[ti] = MIN(minarr[ti], tarr[ti]);
+		if (cal_min_cycles) {
+			for (uint8_t ti = 0; ti < 12; ti++) {
+				minarr[ti] = MIN(minarr[ti], tarr[ti]);
+			}
+			cal_min_cycles--;
+		}
+
+		if (cal_max_cycles) {
+			for (uint8_t ti = 0; ti < 12; ti++) {
+				maxarr[ti] = MAX(maxarr[ti], tarr[ti]);
+			}
+			cal_max_cycles--;
 		}
 
 		if (m || cm) {
 			for (uint8_t ti = 0; ti < 12; ti++) {
-				uint16_t tt = tarr[ti] - minarr[ti];
+				uint16_t tt = tarr[ti];
+
+				if (minarr[ti]<UINT16_MAX) {
+					if ((maxarr[ti]>0) && (minarr[ti]<maxarr[ti])) {
+						uint16_t delta = maxarr[ti] - minarr[ti];
+						uint16_t td = (tarr[ti]>minarr[ti])?(tarr[ti]-minarr[ti]):0;
+						uint32_t tmp = ((int32_t)td*255)/delta;
+						tt = (tmp<255)?(uint16_t)tmp:255;
+					} else {
+						tt = (tarr[ti]>minarr[ti])?(tarr[ti]-minarr[ti]):0;
+					}
+				}
+
 				usart_printhex(HI(tt));
 				usart_printhex(LO(tt));
 				usart_putchr(' ');
