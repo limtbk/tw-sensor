@@ -20,8 +20,51 @@
 
 #define MEASURES 32
 
+#define measure_pinm(__port, __ddr, __pin, __nn, __portt, __ddrt, __pint, __nnt) \
+		uint8_t tmp = 0;\
+		asm volatile (\
+				"	cli"							"\n\t"\
+				"	cbi %[portt],%[nnt]"			"\n\t" /*PORTT=0*/\
+				"	cbi %[port],%[nn]"				"\n\t" /*PORT=0*/\
+				"	sbi %[ddr],%[nn]"				"\n\t" /*DDR=1*/\
+				"	cbi %[ddr],%[nn]"				"\n\t" /*DDR=0*/\
+				"	cbi %[port],%[nn]"				"\n\t" /*PORT=0*/\
+				"	sbi %[portt],%[nnt]"			"\n\t" /*PORTT=1*/\
+				"	rjmp mloop11%="					"\n\t"\
+				"mloop10%=:"						"\n\t"\
+				"	subi %[t],0xFF"					"\n\t" /*t+=1*/\
+				"mloop11%=:"						"\n\t"\
+				"	sbis %[pin],%[nn]"				"\n\t" /*PIN*/\
+				"	rjmp mloop10%="					"\n\t"\
+				"	sbi %[portt],%[nnt]"			"\n\t" /*PORTT=1*/\
+				"	sbi %[port],%[nn]"				"\n\t" /*PORT=1*/\
+				"	sbi %[ddr],%[nn]"				"\n\t" /*DDR=1*/\
+				"	cbi %[ddr],%[nn]"				"\n\t" /*DDR=0*/\
+				"	cbi %[port],%[nn]"				"\n\t" /*PORT=0*/\
+				"	cbi %[portt],%[nnt]"			"\n\t" /*PORTT=0*/\
+				"	rjmp mloop21%="					"\n\t"\
+				"mloop20%=:"						"\n\t"\
+				"	subi %[t],0xFF"					"\n\t" /*t+=1*/\
+				"mloop21%=:"						"\n\t"\
+				"	sbic %[pin],%[nn]"				"\n\t" /*PIN*/\
+				"	rjmp mloop20%="					"\n\t"\
+				"	sei"							"\n\t"\
+				:\
+				[t] "+d" (tmp)\
+				:\
+				[port] "I" (_SFR_IO_ADDR(__port)),\
+				[ddr] "I" (_SFR_IO_ADDR(__ddr)),\
+				[pin] "I" (_SFR_IO_ADDR(__pin)),\
+				[nn] "I" (__nn),\
+				[portt] "I" (_SFR_IO_ADDR(__portt)),\
+				[nnt] "I" (__nnt)\
+		);
+
+#define measure_pin(port, portt) measure_pinm(port, portt)
+
 uint16_t timer1_lastTime;
 
+/*
 void timer1_init(void) {
 #if defined (__AVR_ATmega32U4__)
 	TCCR1A = (0<<COM1A1)|(0<<COM1A0)|(0<<COM1B1)|(0<<COM1B0)|(0<<COM1C1)|(0<<COM1C0)|(0<<WGM11)|(0<<WGM10);
@@ -49,6 +92,7 @@ uint16_t timer1_measureTime(void) {
 	timer1_lastTime = time;
 	return result;
 }
+*/
 
 void init(void) {
 
@@ -67,79 +111,39 @@ void init(void) {
 #endif
 
 	usart_init();
-	timer1_init();
+//	timer1_init();
 	sei();
 }
 
-uint16_t measure_for_pin(volatile uint8_t *pin, uint8_t pinn)
-{
-	uint16_t result = 0;
-	uint8_t pinmask = 1<<pinn;
-	cli();
-	timer1_measureTime();
-	for (uint8_t i = 0; i < MEASURES; i++) {
-		CLRP(SSRT);
-		while (((*pin) & pinmask) != 0) {}
-		*(pin+1) |= pinmask; //DDR = 1
-		*(pin+2) &= ~pinmask; //PORT = 0
-		*(pin+1) &= ~pinmask; //DDR = 0
-		SETP(SSRT);
-		while (!(((*pin) & pinmask) != 0)) {}
-		*(pin+1) |= pinmask; //DDR = 1
-		*(pin+2) |= pinmask; //PORT = 1
-		*(pin+1) &= ~pinmask; //DDR = 0
-		*(pin+2) &= ~pinmask; //PORT = 0
-	}
-	result = timer1_measureTime();
-	sei();
-	return result;
-}
+//uint16_t measure_for_pin(volatile uint8_t *pin, uint8_t pinn)
+//{
+//	uint16_t result = 0;
+//	uint8_t pinmask = 1<<pinn;
+//	cli();
+//	timer1_measureTime();
+//	for (uint8_t i = 0; i < MEASURES; i++) {
+//		CLRP(SSRT);
+//		while (((*pin) & pinmask) != 0) {}
+//		*(pin+1) |= pinmask; //DDR = 1
+//		*(pin+2) &= ~pinmask; //PORT = 0
+//		*(pin+1) &= ~pinmask; //DDR = 0
+//		SETP(SSRT);
+//		while (!(((*pin) & pinmask) != 0)) {}
+//		*(pin+1) |= pinmask; //DDR = 1
+//		*(pin+2) |= pinmask; //PORT = 1
+//		*(pin+1) &= ~pinmask; //DDR = 0
+//		*(pin+2) &= ~pinmask; //PORT = 0
+//	}
+//	result = timer1_measureTime();
+//	sei();
+//	return result;
+//}
 
 uint16_t measure_for_ssr0()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR0))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR0))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR0))),
-				[nn] "I" (PORTN(SSR0)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR0, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -149,47 +153,7 @@ uint16_t measure_for_ssr1()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR1))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR1))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR1))),
-				[nn] "I" (PORTN(SSR1)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR1, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -199,47 +163,7 @@ uint16_t measure_for_ssr2()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR2))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR2))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR2))),
-				[nn] "I" (PORTN(SSR2)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR2, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -249,47 +173,7 @@ uint16_t measure_for_ssr3()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR3))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR3))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR3))),
-				[nn] "I" (PORTN(SSR3)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR3, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -300,47 +184,7 @@ uint16_t measure_for_ssr4()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR4))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR4))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR4))),
-				[nn] "I" (PORTN(SSR4)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR4, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -350,47 +194,7 @@ uint16_t measure_for_ssr5()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR5))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR5))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR5))),
-				[nn] "I" (PORTN(SSR5)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR5, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -400,47 +204,7 @@ uint16_t measure_for_ssr6()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR6))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR6))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR6))),
-				[nn] "I" (PORTN(SSR6)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR6, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -450,47 +214,7 @@ uint16_t measure_for_ssr7()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR7))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR7))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR7))),
-				[nn] "I" (PORTN(SSR7)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR7, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -500,47 +224,7 @@ uint16_t measure_for_ssr8()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR8))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR8))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR8))),
-				[nn] "I" (PORTN(SSR8)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR8, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -550,47 +234,7 @@ uint16_t measure_for_ssr9()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR9))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR9))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR9))),
-				[nn] "I" (PORTN(SSR9)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR9, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -600,47 +244,7 @@ uint16_t measure_for_ssr10()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR10))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR10))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR10))),
-				[nn] "I" (PORTN(SSR10)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR10, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -650,47 +254,7 @@ uint16_t measure_for_ssr11()
 {
 	uint16_t result = 0;
 	for (uint8_t i = 0; i < MEASURES; i++) {
-		uint8_t tmp = 0;
-		asm volatile (
-				"	cli"							"\n\t"
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	rjmp mloop11%="					"\n\t"
-				"mloop10%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop11%=:"						"\n\t"
-				"	sbis %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop10%="					"\n\t"
-
-				"	sbi %[portt],%[nnt]"			"\n\t" //PORTT=1
-				"	sbi %[port],%[nn]"				"\n\t" //PORT=1
-				"	sbi %[ddr],%[nn]"				"\n\t" //DDR=1
-				"	cbi %[ddr],%[nn]"				"\n\t" //DDR=0
-				"	cbi %[port],%[nn]"				"\n\t" //PORT=0
-
-				"	cbi %[portt],%[nnt]"			"\n\t" //PORTT=0
-				"	rjmp mloop21%="					"\n\t"
-				"mloop20%=:"						"\n\t"
-				"	subi %[t],0xFF"					"\n\t" //t+=1
-				"mloop21%=:"						"\n\t"
-				"	sbic %[pin],%[nn]"				"\n\t" //PIN
-				"	rjmp mloop20%="					"\n\t"
-				"	sei"							"\n\t"
-				:
-				[t] "+d" (tmp)
-				:
-				[port] "I" (_SFR_IO_ADDR(PORT(SSR11))),
-				[ddr] "I" (_SFR_IO_ADDR(DDR(SSR11))),
-				[pin] "I" (_SFR_IO_ADDR(PIN(SSR11))),
-				[nn] "I" (PORTN(SSR11)),
-				[portt] "I" (_SFR_IO_ADDR(PORT(SSRT))),
-				[nnt] "I" (PORTN(SSRT))
-		);
+		measure_pin(SSR11, SSRT);
 		result += tmp;
 	}
 	return result;
@@ -730,6 +294,11 @@ int main(void)
 										"r - reset calibration\n\r"
 										"n - calibrate min\n\r"
 										"x - calibrate max\n\r"
+										"R - reset\n\r"
+										"b - binary num mode\n\r"
+										"t - hex text num mode (default)\n\r"
+										"w - raw data mode\n\r"
+										"l - normalized data mode (default)\n\r"
 										"v - version\n\r");
 						break;
 					}
@@ -764,6 +333,12 @@ int main(void)
 				case 'n':
 					{
 						cal_min_cycles = 255;
+						break;
+					}
+				case 'R':
+					{
+						void *bl = (void *)0x3c00; //for ATMega328 with bootloader
+						goto *bl;
 						break;
 					}
 				case 'x':
